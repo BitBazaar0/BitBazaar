@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Cursor AI
+.cursor/
+
+# Sensitive files
+*password*.txt
+*secret*.txt
+*key*.txt
+Supabase-pw.txt
+
+# OS files
+Thumbs.db
+.DS_Store
+*.pem
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+
