@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import {
@@ -75,6 +75,7 @@ const ListingDetailPage = () => {
   const { addItem } = useRecentlyViewed();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [tabValue, setTabValue] = useState(0);
+  const viewIncrementedRef = useRef(false);
 
   const { data, isLoading } = useQuery(
     ['listing', id],
@@ -132,8 +133,19 @@ const ListingDetailPage = () => {
   });
 
   useEffect(() => {
-    if (data?.data.listing) {
-      viewMutation.mutate();
+    // Reset ref when listing ID changes
+    viewIncrementedRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    if (data?.data.listing && !viewIncrementedRef.current) {
+      viewIncrementedRef.current = true;
+
+      // Use setTimeout to ensure this only runs once even in React Strict Mode
+      const timer = setTimeout(() => {
+        viewMutation.mutate();
+      }, 0);
+
       // Add to recently viewed
       addItem({
         id: data.data.listing.id,
@@ -141,9 +153,11 @@ const ListingDetailPage = () => {
         price: data.data.listing.price,
         image: data.data.listing.images?.[0],
       });
+
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, data?.data.listing]);
+  }, [data?.data.listing]);
 
   if (!id) return null;
 

@@ -20,6 +20,11 @@ export const verifyRecaptcha = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    // Skip in test environment
+    if (process.env.NODE_ENV === 'test') {
+      return next();
+    }
+
     // Skip in development if RECAPTCHA_SECRET_KEY is not set
     if (process.env.NODE_ENV === 'development' && !process.env.RECAPTCHA_SECRET_KEY) {
       logger.warn('reCAPTCHA verification skipped - RECAPTCHA_SECRET_KEY not set (development mode)');
