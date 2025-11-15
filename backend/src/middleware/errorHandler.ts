@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import logger from '../utils/logger';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -13,6 +14,20 @@ export const errorHandler = (
 ): void => {
   const statusCode = err.statusCode || 500;
   const status = err.status || 'error';
+
+  // Log error
+  if (statusCode >= 500) {
+    logger.error(`${statusCode} - ${err.message}`, {
+      path: req.path,
+      method: req.method,
+      stack: err.stack,
+    });
+  } else {
+    logger.warn(`${statusCode} - ${err.message}`, {
+      path: req.path,
+      method: req.method,
+    });
+  }
 
   res.status(statusCode).json({
     status,

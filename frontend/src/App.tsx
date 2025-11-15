@@ -7,6 +7,10 @@ import ListingDetailPage from './pages/ListingDetailPage';
 import CreateListingPage from './pages/CreateListingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import VerifyEmailWaitingPage from './pages/VerifyEmailWaitingPage';
 import ProfilePage from './pages/ProfilePage';
 import EditProfilePage from './pages/EditProfilePage';
 import ChatPage from './pages/ChatPage';
@@ -29,6 +33,22 @@ function App() {
         <Route
           path="/register"
           element={user ? <Navigate to="/" replace /> : <RegisterPage />}
+        />
+        <Route
+          path="/forgot-password"
+          element={user ? <Navigate to="/" replace /> : <ForgotPasswordPage />}
+        />
+        <Route
+          path="/reset-password"
+          element={user ? <Navigate to="/" replace /> : <ResetPasswordPage />}
+        />
+        <Route
+          path="/verify-email"
+          element={<VerifyEmailPage />}
+        />
+        <Route
+          path="/verify-email-waiting"
+          element={<VerifyEmailWaitingPage />}
         />
         <Route
           path="/create-listing"

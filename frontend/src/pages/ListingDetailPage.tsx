@@ -261,12 +261,18 @@ const ListingDetailPage = () => {
           <Stack spacing={3}>
             {/* Status Badges */}
             <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-              <Chip 
-                label={listing.partType} 
-                color="primary" 
-                variant="outlined"
-                size="small"
-              />
+              {listing.category && (
+                <Chip 
+                  label={listing.category.name} 
+                  color="primary" 
+                  variant="outlined"
+                  size="small"
+                  sx={{
+                    borderColor: listing.category.color || undefined,
+                    color: listing.category.color || undefined,
+                  }}
+                />
+              )}
               <Chip
                 label={listing.condition.charAt(0).toUpperCase() + listing.condition.slice(1)}
                 variant="outlined"
@@ -587,16 +593,18 @@ const ListingDetailPage = () => {
                 Product Specifications
               </Typography>
               <Grid container spacing={3}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <Box sx={{ py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Part Type
-                    </Typography>
-                    <Typography variant="body1" fontWeight={600}>
-                      {listing.partType}
-                    </Typography>
-                  </Box>
-                </Grid>
+                {listing.category && (
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Category
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600}>
+                        {listing.category.name}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                )}
                 {listing.brand && (
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <Box sx={{ py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
@@ -681,9 +689,9 @@ const ListingDetailPage = () => {
       {data && listing && (
         <Box sx={{ mt: 8 }}>
           <Typography variant="h4" sx={{ mb: 4, fontWeight: 600 }}>
-            More {listing.partType}s
+            More {listing.category?.name || 'Similar'} Listings
           </Typography>
-          <RelatedListings currentListingId={listing.id} partType={listing.partType} />
+          <RelatedListings currentListingId={listing.id} categoryId={listing.categoryId} />
         </Box>
         )}
         
@@ -699,11 +707,11 @@ const ListingDetailPage = () => {
   };
 
 // Related Listings Component
-const RelatedListings = ({ currentListingId, partType }: { currentListingId: string; partType: string }) => {
+const RelatedListings = ({ currentListingId, categoryId }: { currentListingId: string; categoryId: string }) => {
   const { data, isLoading } = useQuery(
-    ['related-listings', partType, currentListingId],
-    () => getListings({ partType: partType as any, limit: 6, page: 1 }),
-    { enabled: !!partType }
+    ['related-listings', categoryId, currentListingId],
+    () => getListings({ categoryId, limit: 6, page: 1 }),
+    { enabled: !!categoryId }
   );
 
   const relatedListings = data?.data.listings.filter(l => l.id !== currentListingId).slice(0, 6) || [];

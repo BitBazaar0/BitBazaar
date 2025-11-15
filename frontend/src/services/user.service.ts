@@ -20,3 +20,11 @@ export const updateProfile = async (data: {
   const response = await api.patch('/users/profile', data);
   return response.data;
 };
+
+export const changePassword = async (data: {
+  currentPassword: string;
+  newPassword: string;
+}) => {
+  const response = await api.post('/users/change-password', data);
+  return response.data;
+};

@@ -10,7 +10,7 @@ const router = express.Router();
 const createListingValidation = [
   body('title').trim().isLength({ min: 3, max: 100 }).withMessage('Title must be between 3 and 100 characters'),
   body('description').trim().isLength({ min: 10, max: 2000 }).withMessage('Description must be between 10 and 2000 characters'),
-  body('partType').isIn(['GPU', 'CPU', 'RAM', 'Motherboard', 'Storage', 'PSU', 'Case', 'Cooling', 'Peripheral', 'Monitor', 'Other']).withMessage('Invalid part type'),
+  body('categoryId').trim().notEmpty().withMessage('Category is required'),
   body('condition').isIn(['new', 'used', 'refurbished']).withMessage('Invalid condition'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
   body('location').trim().notEmpty().withMessage('Location is required'),
@@ -23,6 +23,7 @@ const createListingValidation = [
 const updateListingValidation = [
   body('title').optional().trim().isLength({ min: 3, max: 100 }),
   body('description').optional().trim().isLength({ min: 10, max: 2000 }),
+  body('categoryId').optional().trim().notEmpty(),
   body('price').optional().isFloat({ min: 0 }),
   body('isActive').optional().isBoolean(),
   body('images').optional().isArray()

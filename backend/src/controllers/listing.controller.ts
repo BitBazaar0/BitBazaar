@@ -1,8 +1,9 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { createError } from '../middleware/errorHandler';
-import { ListingCreateInput, ListingFilters, PartType } from '../types';
+import { ListingCreateInput, ListingFilters } from '../types';
 import prisma from '../lib/prisma';
+import { sendEmail } from '../utils/email.service';
 
 export const getListings = async (
   req: AuthRequest,
@@ -11,7 +12,8 @@ export const getListings = async (
 ): Promise<void> => {
   try {
     const filters: ListingFilters = {
-      partType: req.query.partType as PartType | undefined,
+      categoryId: req.query.categoryId as string | undefined,
+      categorySlug: req.query.categorySlug as string | undefined,
       brand: req.query.brand as string | undefined,
       condition: req.query.condition as 'new' | 'used' | 'refurbished' | undefined,
       minPrice: req.query.minPrice ? Number(req.query.minPrice) : undefined,
@@ -43,8 +45,8 @@ export const getListings = async (
       ]
     };
 
-    // Handle partType - search takes precedence over filter if both are set
-    let searchPartType: PartType | undefined;
+    // Handle category search - check if search term matches a category
+    let searchCategoryId: string | undefined;
     
     if (filters.brand) {
       where.brand = {
@@ -75,60 +77,26 @@ export const getListings = async (
     }
 
     if (filters.search) {
-      // Check if search term matches a part type exactly or as a common alias
-      const searchUpper = filters.search.toUpperCase().trim();
-      const partTypeValues: PartType[] = ['GPU', 'CPU', 'RAM', 'Motherboard', 'Storage', 'PSU', 'Case', 'Cooling', 'Peripheral', 'Monitor', 'Other'];
-      const partTypeMap: Record<string, PartType> = {
-        'GPU': 'GPU',
-        'GRAPHICS': 'GPU',
-        'GRAPHICS CARD': 'GPU',
-        'VIDEO CARD': 'GPU',
-        'CPU': 'CPU',
-        'PROCESSOR': 'CPU',
-        'RAM': 'RAM',
-        'MEMORY': 'RAM',
-        'MOTHERBOARD': 'Motherboard',
-        'MB': 'Motherboard',
-        'MOBO': 'Motherboard',
-        'STORAGE': 'Storage',
-        'SSD': 'Storage',
-        'HDD': 'Storage',
-        'PSU': 'PSU',
-        'POWER': 'PSU',
-        'POWER SUPPLY': 'PSU',
-        'POWERSUPPLY': 'PSU',
-        'CASE': 'Case',
-        'PC CASE': 'Case',
-        'COOLING': 'Cooling',
-        'FAN': 'Cooling',
-        'COOLER': 'Cooling',
-        'PERIPHERAL': 'Peripheral',
-        'PERIPHERALS': 'Peripheral',
-        'MONITOR': 'Monitor',
-        'DISPLAY': 'Monitor',
-        'OTHER': 'Other'
-      };
+      // Check if search term matches a category name or slug
+      const searchTerm = filters.search.trim();
       
-      // Try to find exact match first
-      let matchingPartType: PartType | undefined;
-      const searchKey = searchUpper.replace(/\s+/g, ' ').trim();
+      // Try to find category by name or slug (case-insensitive)
+      const matchingCategory = await prisma.category.findFirst({
+        where: {
+          OR: [
+            { name: { equals: searchTerm, mode: 'insensitive' } },
+            { slug: { equals: searchTerm.toLowerCase(), mode: 'insensitive' } },
+            { displayName: { equals: searchTerm, mode: 'insensitive' } }
+          ],
+          isActive: true
+        },
+        select: { id: true }
+      });
       
-      // Check exact match in map first
-      matchingPartType = partTypeMap[searchKey];
-      
-      // If no exact match, check if search term exactly matches a part type (exact match only, not substring)
-      if (!matchingPartType) {
-        matchingPartType = partTypeValues.find(pt => {
-          const ptUpper = pt.toUpperCase();
-          // Only exact match, not substring
-          return ptUpper === searchUpper;
-        });
-      }
-      
-      // If search term matches a part type exactly, store it to filter by partType
-      // This ensures "GPU" search only shows GPU listings, not PSU listings that mention GPU
-      if (matchingPartType) {
-        searchPartType = matchingPartType;
+      if (matchingCategory) {
+        // If search term matches a category exactly, filter by category
+        // This ensures "GPU" search only shows GPU listings, not listings that mention GPU in description
+        searchCategoryId = matchingCategory.id;
       } else {
         // Otherwise, do text search across title, description, brand, model
         where.AND.push({
@@ -146,15 +114,31 @@ export const getListings = async (
       where.sellerId = filters.sellerId;
     }
 
-    // Apply partType filter - explicit filter selection takes precedence over search
-    // If user explicitly selected a partType filter, use that (it overrides search)
-    // Otherwise, if search matches a part type, use that
-    if (filters.partType) {
-      // User explicitly selected a partType filter - this takes precedence
-      where.partType = filters.partType;
-    } else if (searchPartType) {
-      // Search term matched a part type, but no explicit filter was set
-      where.partType = searchPartType;
+    // Apply category filter - priority: categorySlug > categoryId > searchCategoryId
+    let categoryIdToFilter: string | undefined;
+    
+    // 1. Check categorySlug first (highest priority)
+    if (filters.categorySlug) {
+      const category = await prisma.category.findUnique({
+        where: { slug: filters.categorySlug },
+        select: { id: true }
+      });
+      if (category) {
+        categoryIdToFilter = category.id;
+      }
+    }
+    // 2. Check categoryId
+    else if (filters.categoryId) {
+      categoryIdToFilter = filters.categoryId;
+    }
+    // 3. Check searchCategoryId (from search term matching a category)
+    else if (searchCategoryId) {
+      categoryIdToFilter = searchCategoryId;
+    }
+    
+    // Apply categoryId filter if we found one
+    if (categoryIdToFilter) {
+      where.categoryId = categoryIdToFilter;
     }
 
     // Get total count for pagination
@@ -191,7 +175,18 @@ export const getListings = async (
       where,
       skip,
       take: limit,
-      orderBy
+      orderBy,
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            displayName: true,
+            color: true
+          }
+        }
+      }
     });
 
     // Set cache-control headers to prevent 304 Not Modified responses
@@ -227,7 +222,18 @@ export const getListingById = async (
     const { id } = req.params;
 
     const listing = await prisma.listing.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            displayName: true,
+            color: true
+          }
+        }
+      }
     });
 
     if (!listing) {
@@ -266,17 +272,47 @@ export const createListing = async (
 
     const listingData: ListingCreateInput = req.body;
 
+    // Validate categoryId exists
+    if (!listingData.categoryId) {
+      throw createError('categoryId is required', 400);
+    }
+
+    const category = await prisma.category.findUnique({
+      where: { id: listingData.categoryId },
+      select: { id: true, isActive: true }
+    });
+
+    if (!category) {
+      throw createError('Category not found', 400);
+    }
+
+    if (!category.isActive) {
+      throw createError('Cannot create listing with inactive category', 400);
+    }
+
     // Set expiration dates: 3 minutes for expiration, 5 minutes for permanent deletion (for testing)
     // TODO: Change back to weeks in production (3 weeks = 3 * 7 * 24 * 60 * 60 * 1000, 5 weeks = 5 * 7 * 24 * 60 * 60 * 1000)
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 3 * 7 * 24 * 60 * 60 * 1000);
-    const deletedAt = new Date(now.getTime() + 5 * 7 * 24 * 60 * 60 * 1000); 
+    const deletedAt = new Date(now.getTime() + 5 * 7 * 24 * 60 * 60 * 1000);
+    
     const listing = await prisma.listing.create({
       data: {
         ...listingData,
         sellerId: user.id,
         expiresAt,
         deletedAt
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            displayName: true,
+            color: true
+          }
+        }
       }
     });
 

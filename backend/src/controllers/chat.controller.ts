@@ -4,6 +4,8 @@ import { createError } from '../middleware/errorHandler';
 import { MessageCreateInput } from '../types';
 import { Server } from 'socket.io';
 import prisma from '../lib/prisma';
+import { sendEmail, getNewMessageEmail, getListingInquiryEmail } from '../utils/email.service';
+import logger from '../utils/logger';
 
 export const getUserChats = async (
   req: AuthRequest,
@@ -193,6 +195,37 @@ export const createOrGetChat = async (
       // Emit socket event
       const io: Server = req.app.get('io');
       io.to(chat.id).emit('new-message', message);
+
+      // Send email notification to seller about new listing inquiry (first message in new chat)
+      const seller = await prisma.user.findUnique({
+        where: { id: listing.sellerId },
+        select: { id: true, email: true, username: true, emailVerified: true }
+      });
+
+      const buyer = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { username: true }
+      });
+
+      // Only send email if seller has verified email and is not the buyer
+      if (seller && seller.emailVerified && seller.id !== req.user.id) {
+        const listingUrl = `${process.env.FRONTEND_URL}/listings/${listing.id}`;
+        const messageText = content?.substring(0, 200) || 'Sent an image';
+
+        // Send inquiry notification email (don't block response)
+        sendEmail({
+          to: seller.email,
+          subject: `New inquiry about your listing: ${listing.title}`,
+          html: getListingInquiryEmail(
+            buyer?.username || 'Someone',
+            listing.title,
+            messageText,
+            listingUrl
+          ),
+        }).catch((err) => {
+          logger.warn(`Failed to send listing inquiry email: ${err.message || err}`);
+        });
+      }
     }
 
     res.status(201).json({
@@ -248,16 +281,54 @@ export const sendMessage = async (
       data: { updatedAt: new Date() }
     });
 
-    // Emit socket event
-    const io: Server = req.app.get('io');
-    io.to(chatId).emit('new-message', message);
+      // Emit socket event
+      const io: Server = req.app.get('io');
+      io.to(chatId).emit('new-message', message);
 
-    res.status(201).json({
-      status: 'success',
-      data: {
-        message
+      // Send email notification to the other user (if not the sender)
+      const recipientId = chat.buyerId === req.user.id ? chat.sellerId : chat.buyerId;
+      const recipient = await prisma.user.findUnique({
+        where: { id: recipientId },
+        select: { id: true, email: true, username: true, emailVerified: true }
+      });
+
+      // Get listing for email context
+      const listing = await prisma.listing.findUnique({
+        where: { id: chat.listingId },
+        select: { title: true }
+      });
+
+      // Only send email if recipient exists, has verified email, and is not the sender
+      if (recipient && recipient.emailVerified && recipient.id !== req.user.id && listing) {
+        const sender = await prisma.user.findUnique({
+          where: { id: req.user.id },
+          select: { username: true }
+        });
+
+        const chatUrl = `${process.env.FRONTEND_URL}/chat/${chatId}`;
+        const messagePreview = content?.substring(0, 150) || 'Sent an image';
+
+        // Send email notification (don't block response)
+        sendEmail({
+          to: recipient.email,
+          subject: `New message from ${sender?.username || 'Someone'} about ${listing.title}`,
+          html: getNewMessageEmail(
+            sender?.username || 'Someone',
+            listing.title,
+            messagePreview,
+            chatUrl
+          ),
+        }).catch((err) => {
+          logger.warn(`Failed to send message notification email: ${err.message || err}`);
+        });
       }
-    });
+
+      res.status(201).json({
+        status: 'success',
+        data: {
+          message
+        }
+      });
   } catch (error) {
     next(error);
   }

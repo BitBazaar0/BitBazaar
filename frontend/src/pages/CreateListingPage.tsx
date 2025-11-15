@@ -21,7 +21,8 @@ import {
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { CloudUpload, Delete, AddPhotoAlternate, ArrowBack } from '@mui/icons-material';
-import { createListing, ListingCreateInput, PartType, Condition } from '../services/listing.service';
+import { createListing, ListingCreateInput, Condition } from '../services/listing.service';
+import { useCategories } from '../hooks/useCategories';
 import { uploadImages } from '../services/upload.service';
 
 const CreateListingPage = () => {
@@ -40,19 +41,8 @@ const CreateListingPage = () => {
     formState: { errors }
   } = useForm<ListingCreateInput & { imageUrls: string }>();
 
-  const partTypes: PartType[] = [
-    'GPU',
-    'CPU',
-    'RAM',
-    'Motherboard',
-    'Storage',
-    'PSU',
-    'Case',
-    'Cooling',
-    'Peripheral',
-    'Monitor',
-    'Other'
-  ];
+  // Fetch categories using shared hook (cached, deduplicated)
+  const { data: categories = [] } = useCategories();
 
   const conditions: Condition[] = ['new', 'used', 'refurbished'];
 
@@ -139,7 +129,7 @@ const CreateListingPage = () => {
       const listingData: ListingCreateInput = {
         title: data.title,
         description: data.description,
-        partType: data.partType,
+        categoryId: data.categoryId,
         brand: data.brand || undefined,
         model: data.model || undefined,
         condition: data.condition,
@@ -234,23 +224,23 @@ const CreateListingPage = () => {
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <Controller
-                      name="partType"
+                      name="categoryId"
                       control={control}
-                      rules={{ required: 'Part type is required' }}
+                      rules={{ required: 'Category is required' }}
                       render={({ field }) => (
                         <TextField
                           {...field}
                           select
-                          label="Part Type"
+                          label="Category"
                           fullWidth
-                          error={!!errors.partType}
-                          helperText={errors.partType?.message}
+                          error={!!errors.categoryId}
+                          helperText={errors.categoryId?.message}
                           required
                         >
-                          <MenuItem value="">Select type</MenuItem>
-                          {partTypes.map((type) => (
-                            <MenuItem key={type} value={type}>
-                              {type}
+                          <MenuItem value="">Select category</MenuItem>
+                          {categories.map((category) => (
+                            <MenuItem key={category.id} value={category.id}>
+                              {category.displayName || category.name}
                             </MenuItem>
                           ))}
                         </TextField>

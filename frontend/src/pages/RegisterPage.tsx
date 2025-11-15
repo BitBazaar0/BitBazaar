@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import {
@@ -16,6 +16,8 @@ import {
 import Grid from '@mui/material/Grid';
 import { register } from '../services/auth.service';
 import { useAuthStore } from '../stores/authStore';
+import ReCaptchaComponent, { ReCaptchaRef } from '../components/ReCaptcha';
+import { getErrorMessage } from '../utils/errorHandler';
 
 interface RegisterForm {
   email: string;
@@ -28,11 +30,15 @@ interface RegisterForm {
   location?: string;
 }
 
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '';
+
 const RegisterPage = () => {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const recaptchaRef = useRef<ReCaptchaRef>(null);
 
   const {
     control,
@@ -49,15 +55,32 @@ const RegisterPage = () => {
       return;
     }
 
+    // Check reCAPTCHA if site key is configured
+    if (RECAPTCHA_SITE_KEY && !recaptchaToken) {
+      setError('Please complete the reCAPTCHA verification');
+      return;
+    }
+
     try {
       setError(null);
       setIsLoading(true);
       const { confirmPassword, ...registerData } = data;
-      const response = await register(registerData);
-      setAuth(response.data.user, response.data.token);
-      navigate('/');
+      const response = await register({
+        ...registerData,
+        recaptchaToken: recaptchaToken || undefined
+      });
+      
+      // DO NOT log in the user - redirect to verification waiting page
+      // Pass email in state so the waiting page can resend verification
+      navigate('/verify-email-waiting', {
+        state: { email: registerData.email }
+      });
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      const errorMessage = getErrorMessage(err);
+      setError(errorMessage);
+      // Reset reCAPTCHA on error
+      recaptchaRef.current?.reset();
+      setRecaptchaToken(null);
     } finally {
       setIsLoading(false);
     }
@@ -91,6 +114,7 @@ const RegisterPage = () => {
                   {error}
                 </Alert>
               )}
+              
 
               <Stack spacing={3}>
                 <Grid container spacing={2}>
@@ -242,6 +266,18 @@ const RegisterPage = () => {
                     />
                   </Grid>
                 </Grid>
+
+                {RECAPTCHA_SITE_KEY && (
+                  <ReCaptchaComponent
+                    ref={recaptchaRef}
+                    siteKey={RECAPTCHA_SITE_KEY}
+                    onChange={(token) => setRecaptchaToken(token)}
+                    onError={() => {
+                      setError('reCAPTCHA verification failed. Please try again.');
+                      setRecaptchaToken(null);
+                    }}
+                  />
+                )}
 
                 <Button
                   type="submit"

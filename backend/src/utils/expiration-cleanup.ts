@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import logger from './logger';
 
 /**
  * Cleanup expired listings
@@ -32,10 +33,11 @@ export const cleanupExpiredListings = async () => {
       }
     });
 
-    console.log(`✅ Deactivated ${expiredResult.count} expired listings (past 3 minutes, kept for re-listing)`);
+    if (expiredResult.count > 0) {
+      logger.info(`Deactivated ${expiredResult.count} expired listings`);
+    }
 
-    // Step 2: Permanently delete listings past 5 minutes (for testing)
-    // TODO: Change back to 5 weeks in production
+    // Step 2: Permanently delete listings past deletion date
     const permanentlyDeleted = await prisma.listing.deleteMany({
       where: {
         deletedAt: {
@@ -44,14 +46,16 @@ export const cleanupExpiredListings = async () => {
       }
     });
 
-    console.log(`✅ Permanently deleted ${permanentlyDeleted.count} listings (past 5 minutes)`);
+    if (permanentlyDeleted.count > 0) {
+      logger.info(`Permanently deleted ${permanentlyDeleted.count} listings`);
+    }
 
     return {
       expired: expiredResult.count,
       deleted: permanentlyDeleted.count
     };
   } catch (error) {
-    console.error('❌ Error cleaning up expired listings:', error);
+    logger.error('Error cleaning up expired listings:', error);
     throw error;
   }
 };
@@ -62,11 +66,11 @@ export const cleanupExpiredListings = async () => {
 if (require.main === module) {
   cleanupExpiredListings()
     .then((result) => {
-      console.log('Cleanup complete:', result);
+      logger.info('Cleanup complete:', result);
       process.exit(0);
     })
     .catch((error) => {
-      console.error('Cleanup failed:', error);
+      logger.error('Cleanup failed:', error);
       process.exit(1);
     });
 }

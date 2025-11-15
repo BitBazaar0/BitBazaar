@@ -14,9 +14,15 @@ const updateProfileValidation = [
   body('avatar').optional().isURL().withMessage('Avatar must be a valid URL')
 ];
 
-// Routes
-router.get('/:id', userController.getUserProfile);
+const changePasswordValidation = [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters long')
+];
+
+// Routes - Specific routes before parameterized routes
 router.patch('/profile', authenticate, validate(updateProfileValidation), userController.updateProfile);
+router.post('/change-password', authenticate, validate(changePasswordValidation), userController.changePassword);
+router.get('/:id', userController.getUserProfile);
 router.get('/:id/listings', userController.getUserListings);
 router.get('/:id/reviews', userController.getUserReviews);
 

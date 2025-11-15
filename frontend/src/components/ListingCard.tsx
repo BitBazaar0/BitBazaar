@@ -12,7 +12,6 @@ import {
 } from '@mui/material';
 import { Star, Visibility, CheckCircle, LocationOn } from '@mui/icons-material';
 import { Listing } from '../services/listing.service';
-import { getCategoryBadgeColor } from '../config/categories';
 
 interface ListingCardProps {
   listing: Listing;
@@ -34,33 +33,35 @@ const ListingCard = ({ listing }: ListingCardProps) => {
       }}
     >
       {/* Category Badge - Top Left */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 12,
-          left: 12,
-          zIndex: 2,
-          px: 1.5,
-          py: 0.5,
-          borderRadius: 1,
-          bgcolor: getCategoryBadgeColor(listing.partType),
-          border: '1px solid',
-          borderColor: alpha(getCategoryBadgeColor(listing.partType), 0.3),
-        }}
-      >
-        <Typography 
-          variant="caption" 
-          sx={{ 
-            fontWeight: 700,
-            color: '#ffffff',
-            fontSize: '0.7rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
+      {listing.category && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            zIndex: 2,
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 1,
+            bgcolor: listing.category.color || '#6366f1',
+            border: '1px solid',
+            borderColor: alpha(listing.category.color || '#6366f1', 0.3),
           }}
         >
-          {listing.partType}
-        </Typography>
-      </Box>
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              fontWeight: 700,
+              color: '#ffffff',
+              fontSize: '0.7rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
+            {listing.category.name}
+          </Typography>
+        </Box>
+      )}
 
       {/* Status Badges - Top Right */}
       {listing.isSold && (
@@ -196,18 +197,20 @@ const ListingCard = ({ listing }: ListingCardProps) => {
 
         {/* Tags */}
         <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap', gap: 0.5 }}>
-          <Chip 
-            label={listing.partType} 
-            size="small" 
-            color="primary" 
-            variant="outlined"
-            sx={{ 
-              fontSize: '0.75rem',
-              height: 24,
-              borderColor: alpha('#6366f1', 0.3),
-              color: '#818cf8',
-            }}
-          />
+          {listing.category && (
+            <Chip 
+              label={listing.category.name} 
+              size="small" 
+              color="primary" 
+              variant="outlined"
+              sx={{ 
+                fontSize: '0.75rem',
+                height: 24,
+                borderColor: alpha(listing.category.color || '#6366f1', 0.3),
+                color: listing.category.color || '#818cf8',
+              }}
+            />
+          )}
           <Chip
             label={listing.condition.charAt(0).toUpperCase() + listing.condition.slice(1)}
             size="small"

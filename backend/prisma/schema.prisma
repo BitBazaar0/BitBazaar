@@ -10,18 +10,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique // e.g., "GPU", "CPU", "RAM"
+  slug        String    @unique // URL-friendly version
+  displayName String    // e.g., "GPUS", "CPUS"
+  icon        String?   // Optional icon identifier
+  color       String?   // Optional hex color for UI
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  listings Listing[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@map("categories")
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  username  String   @unique
-  password  String
-  firstName String?
-  lastName  String?
-  location  String?
-  phone     String?
-  avatar    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(cuid())
+  email             String   @unique
+  username          String   @unique
+  password          String
+  firstName         String?
+  lastName          String?
+  location          String?
+  phone             String?
+  avatar            String?
+  emailVerified     Boolean  @default(false)
+  verificationToken String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Relations
   listingsAsSeller Listing[] @relation("SellerListings")
@@ -39,7 +62,7 @@ model Listing {
   id          String   @id @default(cuid())
   title       String
   description String   @db.Text
-  partType    String
+  categoryId  String   // Required: all listings must have a category
   brand       String?
   model       String?
   condition   String
@@ -58,12 +81,13 @@ model Listing {
 
   // Relations
   seller User      @relation("SellerListings", fields: [sellerId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   favorites Favorite[]
   reviews Review[]
   chats Chat[]
 
   @@index([sellerId])
-  @@index([partType])
+  @@index([categoryId])
   @@index([isActive])
   @@index([isBoosted])
   @@index([isSold])

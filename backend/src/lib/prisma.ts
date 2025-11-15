@@ -1,18 +1,16 @@
 import { PrismaClient } from '@prisma/client';
+import logger from '../utils/logger';
 
-const prismaClientSingleton = () => {
+const prismaClientSingleton = (): PrismaClient => {
   const databaseUrl = process.env.DATABASE_URL;
   
   // Validate connection string format for Supabase
   if (databaseUrl?.includes('pooler.supabase.com')) {
-    // Ensure pgbouncer=true is in the URL for proper pooling
     if (!databaseUrl.includes('pgbouncer=true')) {
-      console.warn('⚠️  Warning: Supabase pooler URL detected but missing pgbouncer=true parameter.');
-      console.warn('   Consider updating your DATABASE_URL to include ?pgbouncer=true');
+      logger.warn('Supabase pooler URL missing pgbouncer=true. Consider adding it to DATABASE_URL.');
     }
-    // Ensure port 6543 (pooler) is being used, not 5432 (direct)
     if (databaseUrl.includes(':5432')) {
-      console.warn('⚠️  Warning: Using port 5432 with pooler. Consider using port 6543 for connection pooling.');
+      logger.warn('Using port 5432 with pooler. Consider using port 6543 for connection pooling.');
     }
   }
   
@@ -27,10 +25,10 @@ const prismaClientSingleton = () => {
 };
 
 declare const globalThis: {
-  prismaGlobal: ReturnType<typeof prismaClientSingleton>;
+  prismaGlobal: PrismaClient | undefined;
 } & typeof global;
 
-const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+const prisma: PrismaClient = globalThis.prismaGlobal ?? prismaClientSingleton();
 
 if (process.env.NODE_ENV !== 'production') globalThis.prismaGlobal = prisma;
 

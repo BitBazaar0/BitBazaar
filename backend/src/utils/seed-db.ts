@@ -1,18 +1,23 @@
 import prisma from '../lib/prisma';
 import { hashPassword } from './bcrypt.util';
+import logger from './logger';
+import { seedCategories } from './seed-categories';
 
 export const seedData = async () => {
   try {
+    // Always seed categories first (they should always exist)
+    await seedCategories();
+
     // Check if we already have data
     const userCount = await prisma.user.count();
     const listingCount = await prisma.listing.count();
 
     if (userCount > 0 || listingCount > 0) {
-      console.log('⚠️  Data already exists, skipping seed...');
+      logger.info('Data already exists, skipping user/listing seed.');
       return;
     }
 
-    console.log('🌱 Seeding sample data...');
+    logger.info('Seeding sample data...');
 
     // Hash default password
     const defaultPassword = await hashPassword('password123');
@@ -52,9 +57,10 @@ export const seedData = async () => {
       sampleUsers.map((user) => prisma.user.create({ data: user }))
     );
 
-    console.log(`✅ Created ${createdUsers.length} sample users`);
+    logger.info(`Created ${createdUsers.length} sample users`);
 
     // Create sample listings
+    // Note: categoryName is used to map to categoryId by matching the category name
     const sampleListings = [
       {
         title: 'NVIDIA RTX 3080 - Excellent Condition',
@@ -69,7 +75,7 @@ Features:
 - Latest drivers installed
 
 This GPU was used only for gaming, never overclocked aggressively, and always kept in a well-ventilated case. Perfect for 1440p and 4K gaming. Price negotiable for serious buyers.`,
-        partType: 'GPU',
+        categoryName: 'GPU',
         brand: 'NVIDIA',
         model: 'RTX 3080',
         condition: 'used',
@@ -96,7 +102,7 @@ Specifications:
 - Perfect for gaming and content creation
 
 Comes with original cooler and warranty. Purchased but not needed as I decided to go with a different build. Price is firm.`,
-        partType: 'CPU',
+        categoryName: 'CPU',
         brand: 'AMD',
         model: 'Ryzen 9 5900X',
         condition: 'new',
@@ -122,7 +128,7 @@ Features:
 - Lifetime warranty
 
 Used for 1 year in a gaming rig, upgrading to faster RAM. All sticks tested and working perfectly. Original box included.`,
-        partType: 'RAM',
+        categoryName: 'RAM',
         brand: 'Corsair',
         model: 'Vengeance RGB Pro',
         condition: 'used',
@@ -147,7 +153,7 @@ Specifications:
 - 5-year warranty
 
 Used for 6 months, still has warranty. Low write cycles, excellent health. Perfect for your gaming rig or workstation.`,
-        partType: 'Storage',
+        categoryName: 'Storage',
         brand: 'Samsung',
         model: '980 PRO',
         condition: 'used',
@@ -173,7 +179,7 @@ Specifications:
 - HDR support
 
 Includes original box, stand, cables, and power adapter. Perfect for competitive gaming and content creation. Minor scratch on the back, doesn't affect display quality.`,
-        partType: 'Monitor',
+        categoryName: 'Monitor',
         brand: 'ASUS',
         model: 'ROG Strix XG27AQ',
         condition: 'used',
@@ -199,7 +205,7 @@ Features:
 - Gaming-grade wireless performance
 
 Used for 1 year, in great condition. Some keycaps show minor wear but all functions work perfectly. Includes original box, USB receiver, and cable.`,
-        partType: 'Peripheral',
+        categoryName: 'Peripheral',
         brand: 'Logitech',
         model: 'G915 TKL',
         condition: 'used',
@@ -225,7 +231,7 @@ Features:
 - RGB lighting and multiple fan headers
 
 Excellent condition, used for 8 months. All original accessories and box included. BIOS updated to latest version. Perfect for high-end builds.`,
-        partType: 'Motherboard',
+        categoryName: 'Motherboard',
         brand: 'ASUS',
         model: 'ROG Strix X570-E',
         condition: 'used',
@@ -252,7 +258,7 @@ Specifications:
 - Compatible with all modern GPUs
 
 Used for 2 years in a high-end gaming rig. All original cables included. Excellent efficiency and quiet operation. Perfect for RTX 3080/3090 builds.`,
-        partType: 'PSU',
+        categoryName: 'PSU',
         brand: 'Corsair',
         model: 'RM850x',
         condition: 'used',
@@ -267,14 +273,46 @@ Used for 2 years in a high-end gaming rig. All original cables included. Excelle
       }
     ];
 
+    // Get category map for looking up category IDs by name
+    const categories = await prisma.category.findMany();
+    const categoryMap = new Map(categories.map((cat: { name: string; id: string }) => [cat.name, cat.id]));
+
+    // Map categoryName to categoryId for each listing
+    const listingsWithCategories = sampleListings.map(listing => {
+      const categoryId = categoryMap.get(listing.categoryName);
+      if (!categoryId) {
+        logger.warn(`Category not found for categoryName: ${listing.categoryName}, using 'Other'`);
+        const { categoryName, ...rest } = listing;
+        return {
+          ...rest,
+          categoryId: categoryMap.get('Other') || categories[0]?.id || ''
+        };
+      }
+      // Remove categoryName and add categoryId
+      const { categoryName, ...rest } = listing;
+      return {
+        ...rest,
+        categoryId
+      };
+    });
+
     const createdListings = await Promise.all(
-      sampleListings.map((listing) => prisma.listing.create({ data: listing }))
+      listingsWithCategories.map((listing) => {
+        // Explicitly create the data object to ensure types match
+        const { sellerId, ...listingFields } = listing;
+        return prisma.listing.create({ 
+          data: {
+            ...listingFields,
+            sellerId,
+          }
+        });
+      })
     );
 
-    console.log(`✅ Created ${createdListings.length} sample listings`);
-    console.log('✅ Seeding complete!');
+    logger.info(`Created ${createdListings.length} sample listings`);
+    logger.info('Seeding complete!');
   } catch (error) {
-    console.error('❌ Error seeding data:', error);
+    logger.error('Error seeding data:', error);
     throw error;
   }
 };

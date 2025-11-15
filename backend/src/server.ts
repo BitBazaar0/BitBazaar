@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import helmet from 'helmet';
+import compression from 'compression';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -12,9 +14,13 @@ import favoriteRoutes from './routes/favorite.routes';
 import reviewRoutes from './routes/review.routes';
 import userRoutes from './routes/user.routes';
 import uploadRoutes from './routes/upload.routes';
+import categoryRoutes from './routes/category.routes';
+import emailTestRoutes from './routes/email-test.routes';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
+import { apiLimiter, authLimiter, uploadLimiter } from './middleware/rateLimiter';
+import logger from './utils/logger';
 import { seedData } from './utils/seed-db';
 import { cleanupExpiredListings } from './utils/expiration-cleanup';
 
@@ -31,76 +37,100 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
+// Security middleware - must be first
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+  crossOriginEmbedderPolicy: false, // Allow Socket.IO to work
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Compression middleware
+app.use(compression());
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.FRONTEND_URL?.split(',') || ['http://localhost:3000'],
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
+
+// Body parser with size limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Apply rate limiting to all API routes
+app.use('/api', apiLimiter);
 
 // Socket.IO for real-time chat
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  logger.debug(`Socket connection: ${socket.id}`);
 
   socket.on('join-room', (roomId) => {
     socket.join(roomId);
-    console.log(`User ${socket.id} joined room ${roomId}`);
+    logger.debug(`Socket ${socket.id} joined room ${roomId}`);
   });
 
   socket.on('leave-room', (roomId) => {
     socket.leave(roomId);
-    console.log(`User ${socket.id} left room ${roomId}`);
+    logger.debug(`Socket ${socket.id} left room ${roomId}`);
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    logger.debug(`Socket disconnected: ${socket.id}`);
   });
 });
 
 // Make io accessible to routes
 app.set('io', io);
 
-// Routes
-app.use('/api/auth', authRoutes);
+// Routes with specific rate limiters
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/listings', listingRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/upload', uploadRoutes);
+app.use('/api/upload', uploadLimiter, uploadRoutes);
+app.use('/api', emailTestRoutes); // Email test route (dev only)
 
-// Health check
+// Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'BitBazaar API is running' });
+  res.json({
+    status: 'ok',
+    message: 'BitBazaar API is running',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+  });
 });
 
 // Error handling middleware
 app.use(errorHandler);
 
 httpServer.listen(PORT, async () => {
-  console.log(`🚀 BitBazaar API server running on port ${PORT}`);
+  logger.info(`BitBazaar API server running on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
   
   // Seed sample data on startup (non-blocking)
   seedData().catch((err) => {
-    console.error('❌ Error seeding data:', err);
+    logger.error('Error seeding data:', err);
   });
 
-  // Run expiration cleanup on startup (non-blocking, don't fail server startup)
+  // Run expiration cleanup on startup (non-blocking)
   cleanupExpiredListings().catch((err) => {
-    console.error('❌ Error running expiration cleanup:', err);
+    logger.error('Error running expiration cleanup:', err);
   });
   
-  // Schedule cleanup - more frequently in development for testing
+  // Schedule cleanup
   const scheduleCleanup = () => {
     if (process.env.NODE_ENV === 'development') {
       // In development: Run every minute for testing
       setInterval(() => {
         cleanupExpiredListings().catch((err) => {
-          console.error('❌ Error in scheduled cleanup:', err);
+          logger.error('Error in scheduled cleanup:', err);
         });
-      }, 60 * 1000); // Every minute
-      console.log('📅 Expiration cleanup scheduled (runs every minute in development)');
+      }, 60 * 1000);
+      logger.info('Expiration cleanup scheduled (runs every minute in development)');
     } else {
       // In production: Run daily at midnight
       const now = new Date();
@@ -110,23 +140,23 @@ httpServer.listen(PORT, async () => {
 
       setTimeout(() => {
         cleanupExpiredListings().catch((err) => {
-          console.error('❌ Error in scheduled cleanup:', err);
+          logger.error('Error in scheduled cleanup:', err);
         });
         // Run every 24 hours after first run
         setInterval(() => {
           cleanupExpiredListings().catch((err) => {
-            console.error('❌ Error in scheduled cleanup:', err);
+            logger.error('Error in scheduled cleanup:', err);
           });
         }, 24 * 60 * 60 * 1000);
       }, msUntilMidnight);
-      console.log('📅 Expiration cleanup scheduled (runs daily at midnight)');
+      logger.info('Expiration cleanup scheduled (runs daily at midnight)');
     }
   };
 
   scheduleCleanup();
+  
   if (process.env.NODE_ENV === 'development') {
-    console.log('⚠️  TESTING MODE: Expiration set to 3 minutes (expires) / 5 minutes (deletes)');
-    console.log('⚠️  Cleanup runs every minute for testing');
+    logger.warn('TESTING MODE: Expiration set to 3 minutes (expires) / 5 minutes (deletes)');
   }
 });
 

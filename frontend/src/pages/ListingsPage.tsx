@@ -15,7 +15,7 @@ import {
   Chip,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import { getListings, ListingFilters, SortOption, PartType } from '../services/listing.service';
+import { getListings, ListingFilters, SortOption } from '../services/listing.service';
 import ListingCard from '../components/ListingCard';
 import ListingFiltersComponent from '../components/ListingFilters';
 import { ListingGridSkeleton } from '../components/LoadingSkeleton';
@@ -33,9 +33,13 @@ const ListingsPage = () => {
       sort: (searchParams.get('sort') as SortOption) || 'newest',
     };
 
-    const partType = searchParams.get('partType');
-    if (partType) {
-      params.partType = partType as PartType;
+    const categoryId = searchParams.get('categoryId');
+    if (categoryId) {
+      params.categoryId = categoryId;
+    }
+    const categorySlug = searchParams.get('categorySlug');
+    if (categorySlug) {
+      params.categorySlug = categorySlug;
     }
 
     const brand = searchParams.get('brand');
@@ -99,7 +103,8 @@ const ListingsPage = () => {
     if (f.page) normalized.page = f.page;
     if (f.limit) normalized.limit = f.limit;
     if (f.sort) normalized.sort = f.sort;
-    if (f.partType) normalized.partType = f.partType;
+    if (f.categoryId) normalized.categoryId = f.categoryId;
+    if (f.categorySlug) normalized.categorySlug = f.categorySlug;
     if (f.brand) normalized.brand = f.brand;
     if (f.condition) normalized.condition = f.condition;
     if (f.minPrice !== undefined) normalized.minPrice = f.minPrice;
@@ -263,11 +268,18 @@ const ListingsPage = () => {
                 <>
                   {/* Quick Filters */}
                   <QuickFilters 
-                    selectedType={filters.partType} 
-                    onSelect={(type) => {
-                      // Clear search when selecting a partType filter to avoid confusion
-                      setFilters({ ...filters, partType: type, search: undefined, page: 1 });
-                    }} 
+                    selectedCategoryId={filters.categoryId}
+                    selectedCategorySlug={filters.categorySlug}
+                    onSelect={(categoryId, categorySlug) => {
+                      // Clear search when selecting a category filter to avoid confusion
+                      setFilters({ 
+                        ...filters, 
+                        categoryId, 
+                        categorySlug,
+                        search: undefined, 
+                        page: 1 
+                      });
+                    }}
                   />
 
                   {/* Results Header */}

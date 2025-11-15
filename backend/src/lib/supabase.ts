@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import logger from '../utils/logger';
 
 dotenv.config();
 
@@ -15,9 +16,7 @@ const getSupabaseClient = (): SupabaseClient => {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.warn('⚠️  Missing Supabase environment variables. Image uploads will not work.');
-    console.warn('   Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env file');
-    // Create a dummy client that will fail gracefully when used
+    logger.warn('Missing Supabase environment variables. Image uploads will not work.');
     throw new Error('Supabase is not configured. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your .env file');
   }
 

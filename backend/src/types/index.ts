@@ -23,27 +23,24 @@ export interface UserCreateInput {
   location?: string;
 }
 
-// Listing types
-export type PartType =
-  | 'GPU'
-  | 'CPU'
-  | 'RAM'
-  | 'Motherboard'
-  | 'Storage'
-  | 'PSU'
-  | 'Case'
-  | 'Cooling'
-  | 'Peripheral'
-  | 'Monitor'
-  | 'Other';
-
 export type Condition = 'new' | 'used' | 'refurbished';
+
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  displayName: string;
+  icon?: string;
+  color?: string;
+  isActive: boolean;
+}
 
 export interface Listing {
   id: string;
   title: string;
   description: string;
-  partType: PartType;
+  categoryId: string;
+  category?: Category;
   brand?: string;
   model?: string;
   condition: Condition;
@@ -61,7 +58,7 @@ export interface Listing {
 export interface ListingCreateInput {
   title: string;
   description: string;
-  partType: PartType;
+  categoryId: string; // Required: all listings must have a category
   brand?: string;
   model?: string;
   condition: Condition;
@@ -71,7 +68,8 @@ export interface ListingCreateInput {
 }
 
 export interface ListingFilters {
-  partType?: PartType;
+  categoryId?: string;
+  categorySlug?: string;
   brand?: string;
   condition?: Condition;
   minPrice?: number;

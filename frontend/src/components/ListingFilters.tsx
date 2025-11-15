@@ -20,7 +20,8 @@ import {
   Search as SearchIcon,
   FilterList,
 } from '@mui/icons-material';
-import { ListingFilters, PartType, Condition } from '../services/listing.service';
+import { ListingFilters, Condition } from '../services/listing.service';
+import { useCategories } from '../hooks/useCategories';
 
 interface ListingFiltersComponentProps {
   filters: ListingFilters;
@@ -35,7 +36,10 @@ const ListingFiltersComponent = ({ filters, onFiltersChange }: ListingFiltersCom
     condition: false,
     location: false,
   });
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fetch categories using shared hook (cached, deduplicated)
+  const { data: categories = [] } = useCategories();
 
   useEffect(() => {
     setLocalFilters(filters);
@@ -44,9 +48,8 @@ const ListingFiltersComponent = ({ filters, onFiltersChange }: ListingFiltersCom
   const handleChange = (key: keyof ListingFilters, value: any, immediate = false) => {
     const newFilters = { ...localFilters, [key]: value || undefined, page: 1 };
     
-    // If user selects a partType filter, clear the search to avoid confusion
-    // (since search might have set partType from matching search term)
-    if (key === 'partType' && value) {
+    // If user selects a category filter, clear the search to avoid confusion
+    if ((key === 'categoryId' || key === 'categorySlug') && value) {
       newFilters.search = undefined;
     }
     
@@ -94,27 +97,14 @@ const ListingFiltersComponent = ({ filters, onFiltersChange }: ListingFiltersCom
 
   const hasActiveFilters = !!(
     localFilters.search ||
-    localFilters.partType ||
+    localFilters.categoryId ||
+    localFilters.categorySlug ||
     localFilters.brand ||
     localFilters.condition ||
     localFilters.minPrice ||
     localFilters.maxPrice ||
     localFilters.location
   );
-
-  const partTypes: PartType[] = [
-    'GPU',
-    'CPU',
-    'RAM',
-    'Motherboard',
-    'Storage',
-    'PSU',
-    'Case',
-    'Cooling',
-    'Peripheral',
-    'Monitor',
-    'Other'
-  ];
 
   const conditions: Condition[] = ['new', 'used', 'refurbished'];
 
@@ -233,10 +223,17 @@ const ListingFiltersComponent = ({ filters, onFiltersChange }: ListingFiltersCom
                   }}
                 />
               )}
-              {localFilters.partType && (
+              {(localFilters.categoryId || localFilters.categorySlug) && (
                 <Chip
-                  label={`${localFilters.partType}`}
-                  onDelete={() => handleChange('partType', undefined)}
+                  label={
+                    localFilters.categoryId 
+                      ? categories.find(c => c.id === localFilters.categoryId)?.name || 'Category'
+                      : categories.find(c => c.slug === localFilters.categorySlug)?.name || 'Category'
+                  }
+                  onDelete={() => {
+                    handleChange('categoryId', undefined);
+                    handleChange('categorySlug', undefined);
+                  }}
                   size="small"
                   sx={{
                     bgcolor: alpha('#6366f1', 0.15),
@@ -392,8 +389,8 @@ const ListingFiltersComponent = ({ filters, onFiltersChange }: ListingFiltersCom
             <TextField
               select
               fullWidth
-              value={localFilters.partType || ''}
-              onChange={(e) => handleChange('partType', e.target.value || undefined)}
+              value={localFilters.categoryId || ''}
+              onChange={(e) => handleChange('categoryId', e.target.value || undefined)}
               size="small"
               sx={{ 
                 '& .MuiOutlinedInput-root': {
@@ -403,9 +400,9 @@ const ListingFiltersComponent = ({ filters, onFiltersChange }: ListingFiltersCom
               }}
             >
               <MenuItem value="">All Categories</MenuItem>
-              {partTypes.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
+              {categories.map((category) => (
+                <MenuItem key={category.id} value={category.id}>
+                  {category.displayName || category.name}
                 </MenuItem>
               ))}
             </TextField>

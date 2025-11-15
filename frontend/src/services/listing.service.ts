@@ -1,17 +1,5 @@
 import api from '../utils/api';
-
-export type PartType =
-  | 'GPU'
-  | 'CPU'
-  | 'RAM'
-  | 'Motherboard'
-  | 'Storage'
-  | 'PSU'
-  | 'Case'
-  | 'Cooling'
-  | 'Peripheral'
-  | 'Monitor'
-  | 'Other';
+import { Category } from './category.service';
 
 export type Condition = 'new' | 'used' | 'refurbished';
 
@@ -19,7 +7,8 @@ export interface Listing {
   id: string;
   title: string;
   description: string;
-  partType: PartType;
+  categoryId: string;
+  category?: Category;
   brand?: string;
   model?: string;
   condition: Condition;
@@ -47,7 +36,8 @@ export interface Listing {
 export type SortOption = 'newest' | 'oldest' | 'price-low' | 'price-high' | 'recently-added';
 
 export interface ListingFilters {
-  partType?: PartType;
+  categoryId?: string;
+  categorySlug?: string;
   brand?: string;
   condition?: Condition;
   minPrice?: number;
@@ -64,7 +54,7 @@ export interface ListingFilters {
 export interface ListingCreateInput {
   title: string;
   description: string;
-  partType: PartType;
+  categoryId: string;
   brand?: string;
   model?: string;
   condition: Condition;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import {
@@ -15,17 +15,23 @@ import {
 } from '@mui/material';
 import { login } from '../services/auth.service';
 import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandler';
+import ReCaptchaComponent, { ReCaptchaRef } from '../components/ReCaptcha';
 
 interface LoginForm {
   email: string;
   password: string;
 }
 
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '';
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const recaptchaRef = useRef<ReCaptchaRef>(null);
 
   const {
     control,
@@ -33,15 +39,34 @@ const LoginPage = () => {
     formState: { errors }
   } = useForm<LoginForm>();
 
-  const onSubmit = async (data: LoginForm) => {
+  const onSubmit = async (data: LoginForm, e?: React.BaseSyntheticEvent) => {
+    // Prevent default form submission
+    if (e) {
+      e.preventDefault();
+    }
+
+    // Check reCAPTCHA if site key is configured
+    if (RECAPTCHA_SITE_KEY && !recaptchaToken) {
+      setError('Please complete the reCAPTCHA verification');
+      return;
+    }
+
     try {
       setError(null);
       setIsLoading(true);
-      const response = await login(data);
+      const response = await login({
+        ...data,
+        recaptchaToken: recaptchaToken || undefined
+      });
       setAuth(response.data.user, response.data.token);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+      // Extract error message from backend response
+      const errorMessage = getErrorMessage(err);
+      setError(errorMessage);
+      // Reset reCAPTCHA on error
+      recaptchaRef.current?.reset();
+      setRecaptchaToken(null);
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +96,17 @@ const LoginPage = () => {
 
             <Box component="form" onSubmit={handleSubmit(onSubmit)}>
               {error && (
-                <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                <Alert 
+                  severity="error" 
+                  sx={{ 
+                    mb: 3, 
+                    borderRadius: 2,
+                    '& .MuiAlert-message': {
+                      width: '100%'
+                    }
+                  }}
+                  onClose={() => setError(null)}
+                >
                   {error}
                 </Alert>
               )}
@@ -111,6 +146,35 @@ const LoginPage = () => {
                     />
                   )}
                 />
+
+                <Box sx={{ textAlign: 'right' }}>
+                  <MuiLink
+                    component={Link}
+                    to="/forgot-password"
+                    sx={{
+                      color: 'primary.main',
+                      textDecoration: 'none',
+                      fontSize: '0.875rem',
+                      '&:hover': {
+                        textDecoration: 'underline',
+                      },
+                    }}
+                  >
+                    Forgot password?
+                  </MuiLink>
+                </Box>
+
+                {RECAPTCHA_SITE_KEY && (
+                  <ReCaptchaComponent
+                    ref={recaptchaRef}
+                    siteKey={RECAPTCHA_SITE_KEY}
+                    onChange={(token) => setRecaptchaToken(token)}
+                    onError={() => {
+                      setError('reCAPTCHA verification failed. Please try again.');
+                      setRecaptchaToken(null);
+                    }}
+                  />
+                )}
 
                 <Button
                   type="submit"

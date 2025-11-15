@@ -29,9 +29,23 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Unauthorized - clear auth and redirect to login
-      useAuthStore.getState().logout();
-      window.location.href = '/login';
+      const currentPath = window.location.pathname;
+      const requestUrl = error.config?.url || '';
+      
+      const isLoginPage = currentPath === '/login' || currentPath.startsWith('/login');
+      const isRegisterPage = currentPath === '/register' || currentPath.startsWith('/register');
+      const isChangePassword = requestUrl.includes('/users/change-password');
+      
+      // Don't redirect for:
+      // 1. Login/register pages (let them handle auth errors)
+      // 2. Change password endpoint (wrong current password should show error, not redirect)
+      if (!isLoginPage && !isRegisterPage && !isChangePassword) {
+        // Unauthorized - clear auth and redirect to login
+        // This handles expired tokens, unauthorized access, etc.
+        useAuthStore.getState().logout();
+        window.location.href = '/login';
+      }
+      // For login/register/change-password, just reject the error so the page can handle it
     }
     return Promise.reject(error);
   }

@@ -34,8 +34,9 @@ import {
 import { useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { categories } from '../../config/categories';
-import { PartType } from '../../services/listing.service';
+import { useCategories } from '../../hooks/useCategories';
+import { useCategoryBrands } from '../../hooks/useCategoryBrands';
+import { getStaticSubcategoriesForCategory } from '../../config/subcategories';
 
 const Header = () => {
   const { user, logout } = useAuthStore();
@@ -46,6 +47,9 @@ const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Fetch categories using shared hook (cached, deduplicated)
+  const { data: categories = [] } = useCategories();
 
   const handleLogout = () => {
     logout();
@@ -69,22 +73,13 @@ const Header = () => {
     }
   };
 
-  const handleCategoryClick = (partType?: PartType, path?: string) => {
-    if (partType) {
-      navigate(`/listings?partType=${partType}`);
-    } else if (path) {
-      navigate(path);
-    }
-    setHoveredCategory(null);
-  };
-
   const getActiveCategory = () => {
-    const partType = searchParams.get('partType') as PartType | null;
-    const category = categories.find(cat => 
-      cat.partTypes?.includes(partType!) || 
-      cat.subcategories?.some(sub => sub.partType === partType)
-    );
-    return category?.name || null;
+    const categorySlug = searchParams.get('categorySlug');
+    if (categorySlug) {
+      const activeCat = categories.find(cat => cat.slug === categorySlug);
+      return activeCat?.displayName || activeCat?.name || null;
+    }
+    return null;
   };
 
   const activeCategory = getActiveCategory();
@@ -305,18 +300,52 @@ const Header = () => {
               alignItems: 'center',
             }}
           >
+            {/* Special "NEW" link */}
+            <Box sx={{ position: 'relative' }}>
+              <Button
+                component={Link}
+                to="/listings?sort=newest"
+                sx={{
+                  color: searchParams.get('sort') === 'newest' ? 'primary.main' : 'text.secondary',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  px: 2,
+                  py: 1.5,
+                  minWidth: 'auto',
+                  position: 'relative',
+                  '&:hover': {
+                    color: 'primary.main',
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  },
+                  '&::after': searchParams.get('sort') === 'newest' ? {
+                    content: '""',
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 16,
+                    right: 16,
+                    height: 2,
+                    backgroundColor: 'primary.main',
+                  } : {},
+                }}
+              >
+                NEW
+              </Button>
+            </Box>
+
+            {/* Dynamic categories from API */}
             {categories.map((category) => (
               <Box
-                key={category.name}
-                onMouseEnter={() => setHoveredCategory(category.name)}
+                key={category.id}
+                onMouseEnter={() => setHoveredCategory(category.id)}
                 onMouseLeave={() => setHoveredCategory(null)}
                 sx={{ position: 'relative' }}
               >
                 <Button
                   component={Link}
-                  to={category.path}
+                  to={`/listings?categorySlug=${category.slug}`}
                   sx={{
-                    color: activeCategory === category.name ? 'primary.main' : 'text.secondary',
+                    color: activeCategory === (category.displayName || category.name) ? 'primary.main' : 'text.secondary',
                     textTransform: 'uppercase',
                     fontWeight: 600,
                     fontSize: '0.875rem',
@@ -328,7 +357,7 @@ const Header = () => {
                       color: 'primary.main',
                       backgroundColor: 'rgba(255, 255, 255, 0.03)',
                     },
-                    '&::after': activeCategory === category.name ? {
+                    '&::after': activeCategory === (category.displayName || category.name) ? {
                       content: '""',
                       position: 'absolute',
                       bottom: 0,
@@ -339,90 +368,19 @@ const Header = () => {
                     } : {},
                   }}
                 >
-                  {category.name}
+                  {category.displayName || category.name}
                 </Button>
 
-                {/* Dropdown Menu */}
-                {hoveredCategory === category.name && category.subcategories && (
-                  <Paper
-                    onMouseEnter={() => setHoveredCategory(category.name)}
-                    onMouseLeave={() => setHoveredCategory(null)}
-                    sx={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      mt: 0.5,
-                      minWidth: 600,
-                      maxWidth: 800,
-                      p: 3,
-                      backgroundColor: 'background.paper',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 2,
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                      zIndex: 1300,
+                {/* Dropdown Menu with Subcategories */}
+                {hoveredCategory === category.id && (
+                  <CategoryDropdown 
+                    category={category} 
+                    onClose={() => setHoveredCategory(null)}
+                    onNavigate={(categorySlug, brand) => {
+                      navigate(`/listings?categorySlug=${categorySlug}${brand ? `&brand=${encodeURIComponent(brand)}` : ''}`);
+                      setHoveredCategory(null);
                     }}
-                  >
-                    <Grid container spacing={3}>
-                      {/* Main Category Link */}
-                      <Grid size={{ xs: 12 }}>
-                        <Button
-                          component={Link}
-                          to={category.path}
-                          endIcon={<ArrowForward />}
-                          sx={{
-                            color: 'primary.main',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            fontSize: '0.875rem',
-                            mb: 2,
-                            '&:hover': {
-                              backgroundColor: alpha('#6366f1', 0.1),
-                            },
-                          }}
-                          onClick={() => handleCategoryClick(undefined, category.path)}
-                        >
-                          All {category.name}
-                        </Button>
-                      </Grid>
-
-                      {/* Subcategories in columns */}
-                      <Grid container spacing={2}>
-                        {category.subcategories.map((sub, index) => (
-                          <Grid 
-                            key={sub.name} 
-                            size={{ xs: 12, sm: 6, md: 4 }}
-                            sx={{
-                              borderRight: index % 3 === 2 ? 'none' : { xs: 'none', md: '1px solid' },
-                              borderColor: 'divider',
-                              pr: index % 3 === 2 ? 0 : { xs: 0, md: 2 },
-                              mb: 1,
-                            }}
-                          >
-                            <Button
-                              component={Link}
-                              to={`/listings?partType=${sub.partType}`}
-                              sx={{
-                                color: 'text.primary',
-                                textTransform: 'none',
-                                fontSize: '0.875rem',
-                                justifyContent: 'flex-start',
-                                px: 1,
-                                py: 0.75,
-                                '&:hover': {
-                                  backgroundColor: alpha('#6366f1', 0.08),
-                                  color: 'primary.main',
-                                },
-                              }}
-                              onClick={() => handleCategoryClick(sub.partType)}
-                            >
-                              {sub.name}
-                            </Button>
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </Grid>
-                  </Paper>
+                  />
                 )}
               </Box>
             ))}
@@ -459,17 +417,27 @@ const Header = () => {
             </Box>
 
             <Stack spacing={1}>
+              <Button
+                component={Link}
+                to="/listings?sort=newest"
+                color="inherit"
+                fullWidth
+                sx={{ justifyContent: 'flex-start', color: 'text.secondary', textTransform: 'uppercase', fontWeight: 600 }}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                NEW
+              </Button>
               {categories.map((category) => (
                 <Button
-                  key={category.name}
+                  key={category.id}
                   component={Link}
-                  to={category.path}
+                  to={`/listings?categorySlug=${category.slug}`}
                   color="inherit"
                   fullWidth
                   sx={{ justifyContent: 'flex-start', color: 'text.secondary', textTransform: 'uppercase', fontWeight: 600 }}
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {category.name}
+                  {category.displayName || category.name}
                 </Button>
               ))}
               <Divider sx={{ my: 1 }} />
@@ -648,6 +616,114 @@ const Header = () => {
         </MenuItem>
       </Menu>
     </>
+  );
+};
+
+// Separate component for category dropdown to handle dynamic brands
+interface CategoryDropdownProps {
+  category: { id: string; slug: string; displayName: string; name: string };
+  onClose: () => void;
+  onNavigate: (categorySlug: string, brand?: string) => void;
+}
+
+const CategoryDropdown = ({ category, onClose, onNavigate }: CategoryDropdownProps) => {
+  // Fetch static descriptive subcategories
+  const staticSubcats = getStaticSubcategoriesForCategory(category.slug);
+  
+  // Fetch popular brands dynamically from API
+  const { data: brands = [] } = useCategoryBrands(category.slug, 8);
+  
+  // Combine static subcategories with dynamic brands
+  const allSubcategories: Array<{ name: string; type: 'brand' | 'descriptive'; filter: { categorySlug: string; brand?: string } }> = [
+    // Add dynamic brands first (most popular)
+    ...brands.map(brand => ({
+      name: `${brand.name}`,
+      type: 'brand' as const,
+      filter: { categorySlug: category.slug, brand: brand.name }
+    })),
+    // Add static descriptive subcategories
+    ...staticSubcats
+  ];
+
+  if (allSubcategories.length === 0) return null;
+
+  return (
+    <Paper
+      onMouseEnter={() => {}} // Keep open on hover
+      onMouseLeave={onClose}
+      sx={{
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        mt: 0.5,
+        minWidth: 600,
+        maxWidth: 800,
+        p: 3,
+        backgroundColor: 'background.paper',
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 2,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        zIndex: 1300,
+      }}
+    >
+      <Box sx={{ mb: 2 }}>
+        <Button
+          component={Link}
+          to={`/listings?categorySlug=${category.slug}`}
+          endIcon={<ArrowForward />}
+          sx={{
+            color: 'primary.main',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            fontSize: '0.875rem',
+            '&:hover': {
+              backgroundColor: alpha('#6366f1', 0.1),
+            },
+          }}
+          onClick={() => onNavigate(category.slug)}
+        >
+          All {category.displayName || category.name}
+        </Button>
+      </Box>
+
+      <Grid container spacing={2}>
+        {allSubcategories.map((sub, index) => {
+          return (
+            <Grid 
+              key={`${sub.type}-${sub.name}-${index}`}
+              size={{ xs: 12, sm: 6, md: 4 }}
+              sx={{
+                borderRight: index % 3 === 2 ? 'none' : { xs: 'none', md: '1px solid' },
+                borderColor: 'divider',
+                pr: index % 3 === 2 ? 0 : { xs: 0, md: 2 },
+                mb: 1,
+              }}
+            >
+              <Button
+                component={Link}
+                to={`/listings?categorySlug=${sub.filter.categorySlug}${sub.filter.brand ? `&brand=${encodeURIComponent(sub.filter.brand)}` : ''}`}
+                sx={{
+                  color: 'text.primary',
+                  textTransform: 'none',
+                  fontSize: '0.875rem',
+                  justifyContent: 'flex-start',
+                  px: 1,
+                  py: 0.75,
+                  '&:hover': {
+                    backgroundColor: alpha('#6366f1', 0.08),
+                    color: 'primary.main',
+                  },
+                }}
+                onClick={() => onNavigate(sub.filter.categorySlug, sub.filter.brand)}
+              >
+                {sub.name}
+              </Button>
+            </Grid>
+          );
+        })}
+      </Grid>
+    </Paper>
   );
 };
 
