@@ -5,6 +5,7 @@ import { MessageCreateInput } from '../types';
 import { Server } from 'socket.io';
 import prisma from '../lib/prisma';
 import { sendEmail, getNewMessageEmail, getListingInquiryEmail } from '../utils/email.service';
+import { notifyNewMessage } from '../utils/notification.util';
 import logger from '../utils/logger';
 
 export const getUserChats = async (
@@ -196,15 +197,26 @@ export const createOrGetChat = async (
       const io: Server = req.app.get('io');
       io.to(chat.id).emit('new-message', message);
 
+      // Get buyer username for notification
+      const buyer = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { username: true }
+      });
+
+      // Create notification for seller about new listing inquiry
+      notifyNewMessage(
+        listing.sellerId,
+        buyer?.username || 'Someone',
+        chat.id,
+        io
+      ).catch((err) => {
+        logger.warn(`Failed to create inquiry notification: ${err.message || err}`);
+      });
+
       // Send email notification to seller about new listing inquiry (first message in new chat)
       const seller = await prisma.user.findUnique({
         where: { id: listing.sellerId },
         select: { id: true, email: true, username: true, emailVerified: true }
-      });
-
-      const buyer = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: { username: true }
       });
 
       // Only send email if seller has verified email and is not the buyer
@@ -285,8 +297,24 @@ export const sendMessage = async (
       const io: Server = req.app.get('io');
       io.to(chatId).emit('new-message', message);
 
-      // Send email notification to the other user (if not the sender)
+      // Send notification to the other user (if not the sender)
       const recipientId = chat.buyerId === req.user.id ? chat.sellerId : chat.buyerId;
+
+      // Get sender username for notification
+      const sender = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { username: true }
+      });
+
+      // Create notification
+      notifyNewMessage(
+        recipientId,
+        sender?.username || 'Someone',
+        chatId,
+        io
+      ).catch((err) => {
+        logger.warn(`Failed to create message notification: ${err.message || err}`);
+      });
       const recipient = await prisma.user.findUnique({
         where: { id: recipientId },
         select: { id: true, email: true, username: true, emailVerified: true }

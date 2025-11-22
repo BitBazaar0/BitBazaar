@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
+import { useSocket } from './hooks/useSocket';
 import Layout from './components/Layout/Layout';
 import HomePage from './pages/HomePage';
 import ListingsPage from './pages/ListingsPage';
@@ -19,6 +20,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   const { user } = useAuthStore();
+
+  // Establish Socket.IO connection for real-time updates
+  useSocket();
 
   return (
     <Layout>

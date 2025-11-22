@@ -55,6 +55,7 @@ model User {
   chatsAsBuyer Chat[] @relation("BuyerChats")
   chatsAsSeller Chat[] @relation("SellerChats")
   messagesSent Message[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -197,3 +198,22 @@ model Message {
 //   @@index([status])
 //   @@map("orders")
 // }
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "MESSAGE", "LISTING_SOLD", "REVIEW", "FAVORITE", "SYSTEM"
+  title     String
+  message   String   @db.Text
+  link      String?  // Optional link to related resource
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}

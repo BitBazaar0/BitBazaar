@@ -16,6 +16,7 @@ import userRoutes from './routes/user.routes';
 import uploadRoutes from './routes/upload.routes';
 import categoryRoutes from './routes/category.routes';
 import emailTestRoutes from './routes/email-test.routes';
+import notificationRoutes from './routes/notification.routes';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -92,6 +93,7 @@ app.use('/api/favorites', favoriteRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/upload', uploadLimiter, uploadRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api', emailTestRoutes); // Email test route (dev only)
 
 // Health check endpoint

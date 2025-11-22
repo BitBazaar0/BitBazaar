@@ -4,6 +4,9 @@ import { createError } from '../middleware/errorHandler';
 import { ListingCreateInput, ListingFilters } from '../types';
 import prisma from '../lib/prisma';
 import { sendEmail } from '../utils/email.service';
+import { notifyListingSold } from '../utils/notification.util';
+import { Server } from 'socket.io';
+import logger from '../utils/logger';
 
 export const getListings = async (
   req: AuthRequest,
@@ -446,6 +449,16 @@ export const markAsSold = async (
         isSold: true,
         isActive: false
       }
+    });
+
+    // Send notification to seller
+    const io: Server = req.app.get('io');
+    notifyListingSold(
+      req.user.id,
+      listing.title,
+      io
+    ).catch((err) => {
+      logger.warn(`Failed to create listing sold notification: ${err.message || err}`);
     });
 
     res.json({

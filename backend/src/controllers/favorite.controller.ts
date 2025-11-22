@@ -2,6 +2,9 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { createError } from '../middleware/errorHandler';
 import prisma from '../lib/prisma';
+import { notifyListingFavorited } from '../utils/notification.util';
+import { Server } from 'socket.io';
+import logger from '../utils/logger';
 
 export const getFavorites = async (
   req: AuthRequest,
@@ -81,6 +84,19 @@ export const addFavorite = async (
         listingId
       }
     });
+
+    // Notify the seller if it's not their own listing
+    if (listing.sellerId !== req.user.id) {
+      const io: Server = req.app.get('io');
+      notifyListingFavorited(
+        listing.sellerId,
+        listing.title,
+        listingId,
+        io
+      ).catch((err) => {
+        logger.warn(`Failed to create favorite notification: ${err.message || err}`);
+      });
+    }
 
     res.status(201).json({
       status: 'success',

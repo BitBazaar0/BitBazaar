@@ -37,6 +37,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useCategories } from '../../hooks/useCategories';
 import { useCategoryBrands } from '../../hooks/useCategoryBrands';
 import { getStaticSubcategoriesForCategory } from '../../config/subcategories';
+import NotificationBell from '../NotificationBell';
 
 const Header = () => {
   const { user, logout } = useAuthStore();
@@ -105,7 +106,7 @@ const Header = () => {
               component="span"
               sx={{
                 fontWeight: 800,
-                color: '#ffffff',
+                color: 'text.primary',
                 letterSpacing: '-0.02em',
               }}
             >
@@ -194,16 +195,19 @@ const Header = () => {
                   component={Link}
                   to="/chat"
                   color="inherit"
-                  sx={{ 
+                  sx={{
                     color: 'text.secondary',
-                    '&:hover': { 
-                      color: 'text.primary', 
-                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)' 
+                    '&:hover': {
+                      color: 'text.primary',
+                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'
                     }
                   }}
                 >
                   <Chat fontSize="small" />
                 </IconButton>
+
+                {/* Notification Bell */}
+                <NotificationBell />
 
                 {/* Theme Toggle */}
                 <IconButton
